@@ -9,18 +9,54 @@ capture RGB keyframes, estimate poses with SLAM-style tracking, reconstruct a po
 - Offline reconstruction-first workflow
 - Local outputs first (`PLY`, optional `GLB`, packet JSON, manifest)
 
-## Install
+## Setup (pick one)
+Clone once:
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e .[dev]
+gh repo clone amtellezfernandez/lidar-pc
 ```
 
-Optional extras:
-```bash
-python -m pip install -e .[dev,reconstruction]
+### Windows PowerShell (copy/paste exactly)
+```powershell
+cd lidar-pc
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
 ```
+
+### Windows Command Prompt (`cmd.exe`)
+```bat
+cd lidar-pc
+python -m venv .venv
+.\.venv\Scripts\activate.bat
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+```
+
+### Linux/macOS (bash or zsh)
+```bash
+cd lidar-pc
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev]'
+```
+
+### WSL (Ubuntu, Debian, etc.)
+```bash
+cd lidar-pc
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev]'
+```
+
+Optional reconstruction extras:
+```bash
+python -m pip install -e '.[dev,reconstruction]'
+```
+
+If you get `does not appear to be a Python project`, run setup from the repo root (`cd lidar-pc`).
 
 ## Quickstart
 1. Environment check:
