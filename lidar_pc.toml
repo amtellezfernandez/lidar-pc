@@ -1,0 +1,19 @@
+[capture]
+fps_target = 15
+resolution_width = 1280
+resolution_height = 720
+keyframe_interval = 4
+keyframe_blur_threshold = 40.0
+keyframe_pixel_delta_threshold = 10.0
+max_frames = 240
+
+[tracking]
+min_inliers = 30
+step_scale_m = 0.1
+
+[reconstruction]
+quality_profile = "high"
+
+[paths]
+output_root = "outputs"
+

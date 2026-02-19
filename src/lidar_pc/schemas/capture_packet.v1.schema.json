@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lidar-studio/schemas/v1/capture_packet.schema.json",
+  "title": "CapturePacketV1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "session_id",
+    "packet_id",
+    "capture_mode",
+    "chunk_index",
+    "t_capture_ns",
+    "t_wall_ms",
+    "frame_ids",
+    "pose",
+    "intrinsics",
+    "payloads"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "packet_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "capture_mode": {
+      "type": "string",
+      "enum": [
+        "keyframes",
+        "full_stream"
+      ]
+    },
+    "keyframe": {
+      "type": "boolean",
+      "default": true
+    },
+    "keyframe_reason": {
+      "type": "string"
+    },
+    "chunk_index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "t_capture_ns": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "t_wall_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "frame_ids": {
+      "type": "object",
+      "required": [
+        "world",
+        "session",
+        "device",
+        "camera_rgb",
+        "imu"
+      ],
+      "properties": {
+        "world": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "device": {
+          "type": "string"
+        },
+        "camera_rgb": {
+          "type": "string"
+        },
+        "camera_depth": {
+          "type": "string"
+        },
+        "imu": {
+          "type": "string"
+        }
+      }
+    },
+    "pose": {
+      "type": "object",
+      "required": [
+        "translation_m",
+        "quaternion_xyzw",
+        "tracking_state",
+        "pose_source"
+      ],
+      "properties": {
+        "translation_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "quaternion_xyzw": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "tracking_state": {
+          "type": "string",
+          "enum": [
+            "good",
+            "limited",
+            "lost"
+          ]
+        },
+        "pose_source": {
+          "type": "string",
+          "enum": [
+            "arkit",
+            "arcore",
+            "slam"
+          ]
+        }
+      }
+    },
+    "intrinsics": {
+      "type": "object",
+      "required": [
+        "camera_id",
+        "version",
+        "fx",
+        "fy",
+        "cx",
+        "cy"
+      ],
+      "properties": {
+        "camera_id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fx": {
+          "type": "number"
+        },
+        "fy": {
+          "type": "number"
+        },
+        "cx": {
+          "type": "number"
+        },
+        "cy": {
+          "type": "number"
+        }
+      }
+    },
+    "depth_to_rgb": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 16,
+      "maxItems": 16
+    },
+    "payloads": {
+      "type": "object",
+      "required": [
+        "rgb"
+      ],
+      "properties": {
+        "rgb": {
+          "$ref": "#/$defs/payload_ref"
+        },
+        "depth": {
+          "$ref": "#/$defs/payload_ref"
+        }
+      }
+    },
+    "camera_meta": {
+      "type": "object",
+      "properties": {
+        "exposure_us": {
+          "type": "number",
+          "minimum": 0
+        },
+        "iso": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "$defs": {
+    "payload_ref": {
+      "type": "object",
+      "required": [
+        "uri",
+        "content_type",
+        "checksum_sha256",
+        "size_bytes"
+      ],
+      "properties": {
+        "uri": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_type": {
+          "type": "string"
+        },
+        "checksum_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}
+
