@@ -86,11 +86,28 @@ outputs/<session_id>/
 ## WSL Camera Notes
 - `lidar-pc doctor` and `lidar-pc capture` now try WSL camera passthrough automatically by default.
 - You can pin a specific USB camera with `--wsl-busid <BUSID>`.
-- If auto-attach fails, run these on Windows PowerShell as Administrator:
+- If auto-attach fails, run this on Windows PowerShell as Administrator:
 ```powershell
+wsl --shutdown
 usbipd list
-usbipd bind --busid <BUSID>
-usbipd attach --wsl --busid <BUSID> --auto-attach
+usbipd bind --busid 2-8
+usbipd attach --wsl "Ubuntu-24.04" --busid 2-8 --auto-attach
+usbipd list
+```
+- Replace `2-8` with your actual camera BUSID from `usbipd list`. Do not type `<BUSID>` literally in PowerShell.
+- If `usbipd` is missing, install it from PowerShell:
+```powershell
+winget install dorssel.usbipd-win
+```
+- If you see `UtilBindVsockAnyPort: socket failed 1`, the WSL-to-Windows bridge is unavailable. Run:
+```powershell
+wsl --shutdown
+```
+  then reopen WSL and repeat the `usbipd` commands above.
+- Verify camera exposure inside WSL before capture:
+```bash
+ls -l /dev/video*
+lidar-pc doctor --camera-index 0 --auto-fix-wsl-camera
 ```
 - Integrated laptop cameras may not expose an attachable USB bus ID; run `lidar-pc` natively on Windows/macOS in that case.
 

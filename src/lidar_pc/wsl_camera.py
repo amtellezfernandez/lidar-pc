@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import platform
 import re
 import subprocess
@@ -94,6 +95,26 @@ def _run_windows_powershell(command: str, timeout_s: int = 60) -> tuple[int, str
     return (completed.returncode, completed.stdout.strip(), completed.stderr.strip())
 
 
+def _is_wsl_vsock_bridge_error(text: str) -> bool:
+    lowered = text.lower()
+    return "utilbindvsockanyport" in lowered or (
+        "wsl (" in lowered and "socket failed" in lowered
+    )
+
+
+def _current_wsl_distro_name() -> str | None:
+    value = os.environ.get("WSL_DISTRO_NAME", "").strip()
+    return value or None
+
+
+def _candidate_attach_commands(busid: str) -> list[str]:
+    commands = [f"usbipd attach --wsl --busid {busid} --auto-attach"]
+    distro_name = _current_wsl_distro_name()
+    if distro_name:
+        commands.append(f'usbipd attach --wsl "{distro_name}" --busid {busid} --auto-attach')
+    return commands
+
+
 def _find_candidate_busids(devices: list[UsbIpDevice], requested_busid: str | None) -> list[str]:
     if requested_busid:
         return [requested_busid]
@@ -133,14 +154,24 @@ def attempt_wsl_camera_fix(
 
     rc, _, err = _run_windows_powershell("Get-Command usbipd -ErrorAction SilentlyContinue")
     if rc != 0:
+        details = err or "Get-Command usbipd failed"
+        bridge_recovery = None
+        if _is_wsl_vsock_bridge_error(details):
+            bridge_recovery = (
+                "WSL-to-Windows bridge is unavailable (vsock error). "
+                "Run 'wsl --shutdown' in Windows PowerShell, reopen WSL, and retry."
+            )
+        messages = [
+            "usbipd is not available on Windows host.",
+            "Install usbipd-win on Windows and retry.",
+        ]
+        if bridge_recovery:
+            messages.append(bridge_recovery)
+        messages.append(f"details: {details}")
         return WslCameraFixResult(
             attempted=False,
             success=False,
-            messages=[
-                "usbipd is not available on Windows host.",
-                "Install usbipd-win on Windows and retry.",
-                f"details: {err or 'Get-Command usbipd failed'}",
-            ],
+            messages=messages,
             linux_video_devices=[],
             matched_busids=[],
         )
@@ -190,12 +221,23 @@ def attempt_wsl_camera_fix(
         if bind_rc != 0:
             messages.append(f"bind failed for {busid}: {bind_err or bind_out or 'unknown error'}")
 
-        attach_rc, attach_out, attach_err = _run_windows_powershell(
-            f"usbipd attach --wsl --busid {busid} --auto-attach"
-        )
-        if attach_rc != 0:
+        attach_commands = _candidate_attach_commands(busid)
+        for attach_idx, attach_command in enumerate(attach_commands):
+            attach_rc, attach_out, attach_err = _run_windows_powershell(attach_command)
+            if attach_rc == 0:
+                if attach_idx > 0:
+                    messages.append(
+                        "attach succeeded after retrying with explicit WSL distro name"
+                    )
+                break
+
             details = attach_err or attach_out or "unknown error"
             messages.append(f"attach failed for {busid}: {details}")
+            if attach_idx + 1 < len(attach_commands):
+                messages.append(
+                    "retrying attach with explicit distro: "
+                    f"{attach_commands[attach_idx + 1]}"
+                )
 
     deadline = time.time() + max_wait_s
     while time.time() < deadline:
@@ -213,7 +255,7 @@ def attempt_wsl_camera_fix(
     messages.append(
         "camera still unavailable after attach attempts. "
         "You may need to run PowerShell as Administrator and execute: "
-        "usbipd bind --busid <BUSID> && usbipd attach --wsl --busid <BUSID> --auto-attach"
+        "usbipd bind --busid <BUSID> && usbipd attach --wsl <DISTRO> --busid <BUSID> --auto-attach"
     )
     return WslCameraFixResult(
         attempted=True,
