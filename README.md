@@ -73,15 +73,16 @@ lidar-pc doctor --camera-index 0 --auto-fix-wsl-camera
 ```bash
 lidar-pc capture --session-id demo --mode keyframes --camera-index 0 --out outputs
 ```
+Use the exact session path printed by `capture` (example: `outputs\demo_run02`).
 
 3. Reconstruct:
 ```bash
-lidar-pc reconstruct --session outputs/demo --quality high
+lidar-pc reconstruct --session outputs/demo_run02 --quality high
 ```
 
 4. Export packet metadata + manifest:
 ```bash
-lidar-pc export --session outputs/demo --mode keyframes
+lidar-pc export --session outputs/demo_run02 --mode keyframes
 ```
 
 ## Command reference
@@ -92,6 +93,8 @@ lidar-pc capture --session-id room01 --camera-index 0 --auto-fix-wsl-camera
 lidar-pc reconstruct --session outputs/run01 --min-inliers 30 --step-scale-m 0.1
 lidar-pc export --session outputs/run01
 ```
+Tip: if a session folder already exists, `capture` writes to a new folder like `outputs/<session_id>_run02`.
+Always pass that exact folder to `reconstruct` and `export`.
 
 ## Output layout
 ```text
