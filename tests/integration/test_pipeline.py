@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 
 from lidar_pc.capture import capture_session
+from lidar_pc.cli import main
 from lidar_pc.exporter import generate_capture_packets
 from lidar_pc.reconstruction import run_reconstruction
 from lidar_pc.tracking import run_tracking
@@ -51,3 +52,36 @@ def test_end_to_end_pipeline_from_images(tmp_path: Path) -> None:
     manifest = json.loads(exported.manifest_path.read_text(encoding="utf-8"))
     assert manifest["packet_count"] == capture.keyframes
 
+
+def test_cli_run_chains_pipeline_from_images(tmp_path: Path) -> None:
+    inputs = tmp_path / "inputs"
+    _generate_input_images(inputs)
+
+    exit_code = main(
+        [
+            "run",
+            "--session-id",
+            "demo",
+            "--input-glob",
+            str(inputs / "*.jpg"),
+            "--out",
+            str(tmp_path / "outputs"),
+            "--max-frames",
+            "20",
+            "--mode",
+            "keyframes",
+            "--quality",
+            "medium",
+            "--min-inliers",
+            "8",
+            "--step-scale-m",
+            "0.1",
+        ]
+    )
+    assert exit_code == 0
+
+    session_dir = tmp_path / "outputs" / "demo"
+    assert (session_dir / "meta" / "frames.jsonl").exists()
+    assert (session_dir / "meta" / "trajectory.json").exists()
+    assert (session_dir / "reconstruction" / "pointcloud.ply").exists()
+    assert (session_dir / "exports" / "manifest.json").exists()

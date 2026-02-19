@@ -82,6 +82,34 @@ def _parser() -> argparse.ArgumentParser:
     export.add_argument("--session", type=Path, required=True)
     export.add_argument("--mode", choices=["keyframes", "full_stream"], default="keyframes")
 
+    run = sub.add_parser(
+        "run",
+        help="One command pipeline: capture -> reconstruct -> export.",
+    )
+    run.add_argument("--session-id", required=True)
+    run.add_argument("--camera-index", type=int, default=0)
+    run.add_argument("--mode", choices=["keyframes", "full_stream"], default="keyframes")
+    run.add_argument("--out", type=Path, default=None, help="Session output root.")
+    run.add_argument("--max-frames", type=int, default=None)
+    run.add_argument("--duration-s", type=float, default=None)
+    run.add_argument("--input-glob", default=None)
+    run.add_argument("--intrinsics-file", type=Path, default=None)
+    run.add_argument("--camera-id", default="pc_rgb")
+    run.add_argument(
+        "--auto-fix-wsl-camera",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Attempt usbipd passthrough repair when camera is missing in WSL.",
+    )
+    run.add_argument(
+        "--wsl-busid",
+        default=None,
+        help="Optional usbipd BUSID to attach (example: 2-7).",
+    )
+    run.add_argument("--quality", choices=["high", "medium"], default=None)
+    run.add_argument("--min-inliers", type=int, default=None)
+    run.add_argument("--step-scale-m", type=float, default=None)
+
     return parser
 
 
@@ -180,6 +208,51 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "export":
         summary = generate_capture_packets(session_dir=args.session, capture_mode=args.mode)
         print(f"packets={summary.packet_count} manifest={summary.manifest_path}")
+        return 0
+
+    if args.command == "run":
+        output_root = args.out or Path(config.paths.output_root)
+        capture = capture_session(
+            session_id=args.session_id,
+            output_root=output_root,
+            camera_index=args.camera_index,
+            capture_mode=args.mode,
+            max_frames=args.max_frames or config.capture.max_frames,
+            duration_s=args.duration_s,
+            fps_target=config.capture.fps_target,
+            resolution_width=config.capture.resolution_width,
+            resolution_height=config.capture.resolution_height,
+            frame_interval=config.capture.keyframe_interval,
+            blur_threshold=config.capture.keyframe_blur_threshold,
+            pixel_delta_threshold=config.capture.keyframe_pixel_delta_threshold,
+            input_glob=args.input_glob,
+            intrinsics_path=args.intrinsics_file,
+            camera_id=args.camera_id,
+            auto_fix_wsl_camera=args.auto_fix_wsl_camera,
+            wsl_busid=args.wsl_busid,
+        )
+        tracking = run_tracking(
+            session_dir=capture.session_dir,
+            min_inliers=args.min_inliers or config.tracking.min_inliers,
+            step_scale_m=args.step_scale_m or config.tracking.step_scale_m,
+        )
+        reconstruction = run_reconstruction(
+            session_dir=capture.session_dir,
+            quality=args.quality or config.reconstruction.quality_profile,
+        )
+        exported = generate_capture_packets(session_dir=capture.session_dir, capture_mode=args.mode)
+
+        print(f"session={capture.session_dir}")
+        print(
+            f"captured={capture.keyframes}/{capture.total_source_frames} "
+            f"poses={tracking.pose_count} good_ratio={tracking.good_ratio:.2f}"
+        )
+        print(
+            f"pointcloud={reconstruction.pointcloud_path} points={reconstruction.point_count} "
+            f"manifest={exported.manifest_path}"
+        )
+        if reconstruction.mesh_path:
+            print(f"mesh={reconstruction.mesh_path}")
         return 0
 
     parser.print_help()
