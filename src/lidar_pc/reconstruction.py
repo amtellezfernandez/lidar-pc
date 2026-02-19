@@ -123,6 +123,7 @@ def run_reconstruction(*, session_dir: Path, quality: str = "high") -> Reconstru
         colors = np.full((len(points), 3), 180, dtype=np.uint8)
 
     pointcloud_path = session_dir / "reconstruction" / "pointcloud.ply"
+    pointcloud_path.parent.mkdir(parents=True, exist_ok=True)
     mesh_path: Path | None = None
 
     try:
@@ -133,9 +134,15 @@ def run_reconstruction(*, session_dir: Path, quality: str = "high") -> Reconstru
         cloud.colors = o3d.utility.Vector3dVector(colors.astype(np.float64) / 255.0)
         if len(points) > 50:
             cloud, _ = cloud.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
-        o3d.io.write_point_cloud(str(pointcloud_path), cloud, write_ascii=True)
         points = np.asarray(cloud.points)
+        colors = np.clip(np.asarray(cloud.colors) * 255.0, 0, 255).astype(np.uint8)
+
+        write_ok = o3d.io.write_point_cloud(str(pointcloud_path), cloud, write_ascii=True)
+        if not write_ok:
+            _write_ascii_ply(pointcloud_path, points, colors)
     except ModuleNotFoundError:
+        _write_ascii_ply(pointcloud_path, points, colors)
+    except Exception:
         _write_ascii_ply(pointcloud_path, points, colors)
 
     try:
@@ -165,4 +172,3 @@ def run_reconstruction(*, session_dir: Path, quality: str = "high") -> Reconstru
         mesh_path=mesh_path,
         point_count=int(len(points)),
     )
-

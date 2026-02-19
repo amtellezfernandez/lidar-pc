@@ -129,7 +129,10 @@ def _capture_from_camera(
 def _capture_from_files(pattern: str, max_frames: int) -> list[np.ndarray]:
     paths = sorted(Path(p) for p in glob.glob(pattern))
     if not paths:
-        raise RuntimeError(f"No images matched pattern: {pattern}")
+        raise RuntimeError(
+            f"No images matched pattern: {pattern} (cwd={Path.cwd()}). "
+            "Run from the repo root or pass a correct --input-glob."
+        )
 
     frames: list[np.ndarray] = []
     for path in paths[:max_frames]:
@@ -301,8 +304,12 @@ def calibrate_camera(
             break
 
     if len(objpoints) < 5 or image_shape is None:
+        source = f"pattern '{input_glob}'" if input_glob else f"camera index {camera_index}"
         raise RuntimeError(
-            "Not enough checkerboard detections for calibration (need >= 5 samples)."
+            f"Not enough checkerboard detections from {source} "
+            f"(found {len(objpoints)}, need >= 5 samples). "
+            f"Verify --board matches your checkerboard inner corners ({board_rows}x{board_cols}), "
+            "keep the board in focus, and capture varied angles/distances."
         )
 
     _, camera_matrix, _, _, _ = cv2.calibrateCamera(objpoints, imgpoints, image_shape, None, None)
