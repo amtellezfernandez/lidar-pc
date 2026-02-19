@@ -25,6 +25,17 @@ def _parser() -> argparse.ArgumentParser:
     doctor = sub.add_parser("doctor", help="Validate local runtime and camera access.")
     doctor.add_argument("--camera-index", type=int, default=0)
     doctor.add_argument("--skip-camera", action="store_true")
+    doctor.add_argument(
+        "--auto-fix-wsl-camera",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Attempt usbipd passthrough repair when camera is missing in WSL.",
+    )
+    doctor.add_argument(
+        "--wsl-busid",
+        default=None,
+        help="Optional usbipd BUSID to attach (example: 2-7).",
+    )
 
     calibrate = sub.add_parser("calibrate", help="Estimate camera intrinsics from checkerboard.")
     calibrate.add_argument("--camera-id", default="pc_rgb")
@@ -49,6 +60,17 @@ def _parser() -> argparse.ArgumentParser:
     capture.add_argument("--input-glob", default=None)
     capture.add_argument("--intrinsics-file", type=Path, default=None)
     capture.add_argument("--camera-id", default="pc_rgb")
+    capture.add_argument(
+        "--auto-fix-wsl-camera",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Attempt usbipd passthrough repair when camera is missing in WSL.",
+    )
+    capture.add_argument(
+        "--wsl-busid",
+        default=None,
+        help="Optional usbipd BUSID to attach (example: 2-7).",
+    )
 
     reconstruct = sub.add_parser("reconstruct", help="Track poses and reconstruct point cloud.")
     reconstruct.add_argument("--session", type=Path, required=True)
@@ -79,7 +101,12 @@ def main(argv: list[str] | None = None) -> int:
     config = load_config(args.config if args.config and args.config.exists() else None)
 
     if args.command == "doctor":
-        checks, healthy = run_doctor(camera_index=args.camera_index, skip_camera=args.skip_camera)
+        checks, healthy = run_doctor(
+            camera_index=args.camera_index,
+            skip_camera=args.skip_camera,
+            auto_fix_wsl_camera=args.auto_fix_wsl_camera,
+            wsl_busid=args.wsl_busid,
+        )
         for check in checks:
             print(f"{check.name:10} {check.status:5} {check.details}")
         return 0 if healthy else 1
@@ -121,6 +148,8 @@ def main(argv: list[str] | None = None) -> int:
             input_glob=args.input_glob,
             intrinsics_path=args.intrinsics_file,
             camera_id=args.camera_id,
+            auto_fix_wsl_camera=args.auto_fix_wsl_camera,
+            wsl_busid=args.wsl_busid,
         )
         print(
             f"captured {summary.keyframes} keyframes from "

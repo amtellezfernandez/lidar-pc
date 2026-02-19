@@ -19,6 +19,7 @@ from lidar_pc.utils import (
     write_json,
     write_jsonl,
 )
+from lidar_pc.wsl_camera import attempt_wsl_camera_fix
 
 
 @dataclass(slots=True)
@@ -86,10 +87,23 @@ def _capture_from_camera(
     width: int,
     height: int,
     fps_target: int,
+    auto_fix_wsl_camera: bool = True,
+    wsl_busid: str | None = None,
 ) -> list[np.ndarray]:
     cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
-        raise RuntimeError(f"Unable to open camera index {camera_index}")
+        if auto_fix_wsl_camera:
+            fix = attempt_wsl_camera_fix(requested_busid=wsl_busid)
+            cap.release()
+            cap = cv2.VideoCapture(camera_index)
+            if not cap.isOpened():
+                details = "; ".join(fix.messages[-3:]) if fix.messages else "no fix details"
+                raise RuntimeError(
+                    f"Unable to open camera index {camera_index}. "
+                    f"WSL auto-fix attempted={fix.attempted} success={fix.success}. {details}"
+                )
+        else:
+            raise RuntimeError(f"Unable to open camera index {camera_index}")
 
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
@@ -146,6 +160,8 @@ def capture_session(
     input_glob: str | None = None,
     intrinsics_path: Path | None = None,
     camera_id: str = "pc_rgb",
+    auto_fix_wsl_camera: bool = True,
+    wsl_busid: str | None = None,
 ) -> CaptureSummary:
     session_dir = allocate_session_dir(output_root=output_root, session_id=session_id)
     rgb_dir = ensure_dir(session_dir / "rgb")
@@ -161,6 +177,8 @@ def capture_session(
             width=resolution_width,
             height=resolution_height,
             fps_target=fps_target,
+            auto_fix_wsl_camera=auto_fix_wsl_camera,
+            wsl_busid=wsl_busid,
         )
 
     records: list[FrameRecord] = []

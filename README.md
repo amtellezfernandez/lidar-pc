@@ -28,6 +28,11 @@ python -m pip install -e .[dev,reconstruction]
 lidar-pc doctor --skip-camera
 ```
 
+WSL camera repair (automatic usbipd attempt):
+```bash
+lidar-pc doctor --camera-index 0 --auto-fix-wsl-camera
+```
+
 2. Capture a session:
 ```bash
 lidar-pc capture --session-id demo --mode keyframes --camera-index 0 --out outputs
@@ -47,6 +52,7 @@ lidar-pc export --session outputs/demo --mode keyframes
 ```bash
 lidar-pc calibrate --camera-id laptop_cam --board 6x9 --square-mm 25 --samples 20
 lidar-pc capture --session-id run01 --input-glob "data/*.jpg" --out outputs
+lidar-pc capture --session-id room01 --camera-index 0 --auto-fix-wsl-camera
 lidar-pc reconstruct --session outputs/run01 --min-inliers 30 --step-scale-m 0.1
 lidar-pc export --session outputs/run01
 ```
@@ -75,9 +81,20 @@ outputs/<session_id>/
 - WSL/Linux: `scripts/setup_wsl.sh`
 - macOS: `scripts/setup_macos.sh`
 - Windows PowerShell: `scripts/setup_windows.ps1`
+- WSL camera helper: `scripts/fix_wsl_camera.sh`
+
+## WSL Camera Notes
+- `lidar-pc doctor` and `lidar-pc capture` now try WSL camera passthrough automatically by default.
+- You can pin a specific USB camera with `--wsl-busid <BUSID>`.
+- If auto-attach fails, run these on Windows PowerShell as Administrator:
+```powershell
+usbipd list
+usbipd bind --busid <BUSID>
+usbipd attach --wsl --busid <BUSID> --auto-attach
+```
+- Integrated laptop cameras may not expose an attachable USB bus ID; run `lidar-pc` natively on Windows/macOS in that case.
 
 ## Limitations
 - Built-in webcams are not true LiDAR sensors; depth is estimated and scale can drift.
 - Reconstruction quality depends on lighting, texture, and camera motion.
 - Real-time dense mapping is out of scope for v1.
-
