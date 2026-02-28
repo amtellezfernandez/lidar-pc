@@ -127,10 +127,45 @@ def _find_candidate_busids(devices: list[UsbIpDevice], requested_busid: str | No
     return candidates
 
 
+def _device_for_busid(devices: list[UsbIpDevice], busid: str) -> UsbIpDevice | None:
+    for device in devices:
+        if device.busid == busid:
+            return device
+    return None
+
+
+def _state_indicates_shared_or_attached(state: str) -> bool:
+    lowered = state.lower()
+    if "not shared" in lowered:
+        return False
+    return "shared" in lowered or "attach" in lowered
+
+
+def _attempt_usbipd_attach(busid: str) -> tuple[bool, list[str]]:
+    messages: list[str] = []
+    attach_commands = _candidate_attach_commands(busid)
+    for attach_idx, attach_command in enumerate(attach_commands):
+        attach_rc, attach_out, attach_err = _run_windows_powershell(attach_command)
+        if attach_rc == 0:
+            if attach_idx > 0:
+                messages.append("attach succeeded after retrying with explicit WSL distro name")
+            return True, messages
+
+        details = attach_err or attach_out or "unknown error"
+        messages.append(f"attach failed for {busid}: {details}")
+        if attach_idx + 1 < len(attach_commands):
+            messages.append(
+                "retrying attach with explicit distro: "
+                f"{attach_commands[attach_idx + 1]}"
+            )
+    return False, messages
+
+
 def attempt_wsl_camera_fix(
     *,
     requested_busid: str | None = None,
     max_wait_s: float = 6.0,
+    allow_bind: bool = False,
 ) -> WslCameraFixResult:
     messages: list[str] = []
     initial_devices = list_linux_video_devices()
@@ -216,28 +251,38 @@ def attempt_wsl_camera_fix(
         )
 
     for busid in busids:
-        messages.append(f"attempting usbipd bind/attach for {busid}")
+        device = _device_for_busid(devices, busid)
+        state_text = f" ({device.state})" if device else ""
+        messages.append(f"attempting usbipd attach for {busid}{state_text}")
+
+        attached, attach_messages = _attempt_usbipd_attach(busid)
+        messages.extend(attach_messages)
+        if attached:
+            continue
+
+        already_shared = bool(device and _state_indicates_shared_or_attached(device.state))
+        if already_shared:
+            messages.append(
+                f"{busid} is already shared/attached; skipping bind retry to avoid admin-only step"
+            )
+            continue
+
+        if not allow_bind:
+            messages.append(
+                f"{busid} is not shared and bind retry is disabled (allow_bind=False)"
+            )
+            continue
+
+        messages.append(f"attempting usbipd bind for {busid} (may require Administrator)")
         bind_rc, bind_out, bind_err = _run_windows_powershell(f"usbipd bind --busid {busid}")
         if bind_rc != 0:
             messages.append(f"bind failed for {busid}: {bind_err or bind_out or 'unknown error'}")
+            continue
 
-        attach_commands = _candidate_attach_commands(busid)
-        for attach_idx, attach_command in enumerate(attach_commands):
-            attach_rc, attach_out, attach_err = _run_windows_powershell(attach_command)
-            if attach_rc == 0:
-                if attach_idx > 0:
-                    messages.append(
-                        "attach succeeded after retrying with explicit WSL distro name"
-                    )
-                break
-
-            details = attach_err or attach_out or "unknown error"
-            messages.append(f"attach failed for {busid}: {details}")
-            if attach_idx + 1 < len(attach_commands):
-                messages.append(
-                    "retrying attach with explicit distro: "
-                    f"{attach_commands[attach_idx + 1]}"
-                )
+        attached, attach_messages = _attempt_usbipd_attach(busid)
+        messages.extend(attach_messages)
+        if attached:
+            messages.append("camera attach succeeded after bind")
 
     deadline = time.time() + max_wait_s
     while time.time() < deadline:

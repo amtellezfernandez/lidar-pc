@@ -77,8 +77,6 @@ BUSID  VID:PID    DEVICE                                                        
             return (0, "usbipd", "")
         if command == "usbipd list":
             return (0, sample, "")
-        if command == "usbipd bind --busid 2-7":
-            return (0, "", "")
         if command == "usbipd attach --wsl --busid 2-7 --auto-attach":
             return (1, "", "option '--wsl' requires an argument")
         if command == 'usbipd attach --wsl "Ubuntu-24.04" --busid 2-7 --auto-attach':
@@ -90,3 +88,104 @@ BUSID  VID:PID    DEVICE                                                        
     assert result.success
     assert any("retrying attach with explicit distro" in message for message in result.messages)
     assert 'usbipd attach --wsl "Ubuntu-24.04" --busid 2-7 --auto-attach' in calls
+    assert "usbipd bind --busid 2-7" not in calls
+
+
+def test_attempt_fix_tries_bind_only_after_attach_fail_for_not_shared(monkeypatch) -> None:
+    monkeypatch.setattr(wsl_camera, "is_wsl_environment", lambda: True)
+    device_states = [[], ["/dev/video0"]]
+    monkeypatch.setattr(
+        wsl_camera,
+        "list_linux_video_devices",
+        lambda: device_states.pop(0) if device_states else ["/dev/video0"],
+    )
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu-24.04")
+
+    calls: list[str] = []
+    sample = """
+BUSID  VID:PID    DEVICE                                                        STATE
+2-7    046d:0825  Logitech Webcam C270                                          Not shared
+"""
+
+    def fake_run(command: str, timeout_s: int = 60) -> tuple[int, str, str]:
+        calls.append(command)
+        if command == "Get-Command usbipd -ErrorAction SilentlyContinue":
+            return (0, "usbipd", "")
+        if command == "usbipd list":
+            return (0, sample, "")
+        if command == "usbipd bind --busid 2-7":
+            return (0, "", "")
+        if command == "usbipd attach --wsl --busid 2-7 --auto-attach":
+            return (1, "", "option '--wsl' requires an argument")
+        if command == 'usbipd attach --wsl "Ubuntu-24.04" --busid 2-7 --auto-attach':
+            explicit_calls = calls.count(command)
+            if explicit_calls == 1:
+                return (1, "", "device is not shared")
+            return (0, "", "")
+        return (1, "", f"unexpected command: {command}")
+
+    monkeypatch.setattr(wsl_camera, "_run_windows_powershell", fake_run)
+    result = wsl_camera.attempt_wsl_camera_fix(max_wait_s=0.05, allow_bind=True)
+    assert result.success
+    assert "usbipd bind --busid 2-7" in calls
+    assert any("camera attach succeeded after bind" in message for message in result.messages)
+
+
+def test_attempt_fix_skips_bind_retry_when_already_shared(monkeypatch) -> None:
+    monkeypatch.setattr(wsl_camera, "is_wsl_environment", lambda: True)
+    monkeypatch.setattr(wsl_camera, "list_linux_video_devices", lambda: [])
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu-24.04")
+
+    calls: list[str] = []
+    sample = """
+BUSID  VID:PID    DEVICE                                                        STATE
+2-7    046d:0825  Logitech Webcam C270                                          Shared
+"""
+
+    def fake_run(command: str, timeout_s: int = 60) -> tuple[int, str, str]:
+        calls.append(command)
+        if command == "Get-Command usbipd -ErrorAction SilentlyContinue":
+            return (0, "usbipd", "")
+        if command == "usbipd list":
+            return (0, sample, "")
+        if command == "usbipd attach --wsl --busid 2-7 --auto-attach":
+            return (1, "", "device busy")
+        if command == 'usbipd attach --wsl "Ubuntu-24.04" --busid 2-7 --auto-attach':
+            return (1, "", "device busy")
+        return (1, "", f"unexpected command: {command}")
+
+    monkeypatch.setattr(wsl_camera, "_run_windows_powershell", fake_run)
+    result = wsl_camera.attempt_wsl_camera_fix(max_wait_s=0.01)
+    assert not result.success
+    assert "usbipd bind --busid 2-7" not in calls
+    assert any("skipping bind retry" in message for message in result.messages)
+
+
+def test_attempt_fix_skips_bind_when_allow_bind_is_false(monkeypatch) -> None:
+    monkeypatch.setattr(wsl_camera, "is_wsl_environment", lambda: True)
+    monkeypatch.setattr(wsl_camera, "list_linux_video_devices", lambda: [])
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu-24.04")
+
+    calls: list[str] = []
+    sample = """
+BUSID  VID:PID    DEVICE                                                        STATE
+2-7    046d:0825  Logitech Webcam C270                                          Not shared
+"""
+
+    def fake_run(command: str, timeout_s: int = 60) -> tuple[int, str, str]:
+        calls.append(command)
+        if command == "Get-Command usbipd -ErrorAction SilentlyContinue":
+            return (0, "usbipd", "")
+        if command == "usbipd list":
+            return (0, sample, "")
+        if command == "usbipd attach --wsl --busid 2-7 --auto-attach":
+            return (1, "", "option '--wsl' requires an argument")
+        if command == 'usbipd attach --wsl "Ubuntu-24.04" --busid 2-7 --auto-attach':
+            return (1, "", "device is not shared")
+        return (1, "", f"unexpected command: {command}")
+
+    monkeypatch.setattr(wsl_camera, "_run_windows_powershell", fake_run)
+    result = wsl_camera.attempt_wsl_camera_fix(max_wait_s=0.01, allow_bind=False)
+    assert not result.success
+    assert "usbipd bind --busid 2-7" not in calls
+    assert any("allow_bind=False" in message for message in result.messages)

@@ -7,6 +7,11 @@ if [[ ! -x ".venv/bin/lidar-pc" ]]; then
 fi
 
 CAMERA_INDEX="${1:-0}"
+ALLOW_BIND_FLAG="${2:-}"
 
-.venv/bin/lidar-pc doctor --camera-index "${CAMERA_INDEX}" --auto-fix-wsl-camera
+CMD=(doctor --camera-index "${CAMERA_INDEX}" --auto-fix-wsl-camera)
+if [[ "${ALLOW_BIND_FLAG}" == "--allow-wsl-bind" ]]; then
+  CMD+=(--allow-wsl-bind)
+fi
 
+.venv/bin/lidar-pc "${CMD[@]}"

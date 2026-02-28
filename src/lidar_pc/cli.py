@@ -36,6 +36,12 @@ def _parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional usbipd BUSID to attach (example: 2-7).",
     )
+    doctor.add_argument(
+        "--allow-wsl-bind",
+        action="store_true",
+        default=False,
+        help="Allow usbipd bind fallback (may require Windows Administrator).",
+    )
 
     calibrate = sub.add_parser("calibrate", help="Estimate camera intrinsics from checkerboard.")
     calibrate.add_argument("--camera-id", default="pc_rgb")
@@ -58,6 +64,13 @@ def _parser() -> argparse.ArgumentParser:
     capture.add_argument("--max-frames", type=int, default=None)
     capture.add_argument("--duration-s", type=float, default=None)
     capture.add_argument("--input-glob", default=None)
+    capture.add_argument("--input-video", type=Path, default=None)
+    capture.add_argument(
+        "--video-frame-step",
+        type=int,
+        default=1,
+        help="Use every Nth frame when reading --input-video.",
+    )
     capture.add_argument("--intrinsics-file", type=Path, default=None)
     capture.add_argument("--camera-id", default="pc_rgb")
     capture.add_argument(
@@ -70,6 +83,12 @@ def _parser() -> argparse.ArgumentParser:
         "--wsl-busid",
         default=None,
         help="Optional usbipd BUSID to attach (example: 2-7).",
+    )
+    capture.add_argument(
+        "--allow-wsl-bind",
+        action="store_true",
+        default=False,
+        help="Allow usbipd bind fallback (may require Windows Administrator).",
     )
 
     reconstruct = sub.add_parser("reconstruct", help="Track poses and reconstruct point cloud.")
@@ -93,6 +112,13 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument("--max-frames", type=int, default=None)
     run.add_argument("--duration-s", type=float, default=None)
     run.add_argument("--input-glob", default=None)
+    run.add_argument("--input-video", type=Path, default=None)
+    run.add_argument(
+        "--video-frame-step",
+        type=int,
+        default=1,
+        help="Use every Nth frame when reading --input-video.",
+    )
     run.add_argument("--intrinsics-file", type=Path, default=None)
     run.add_argument("--camera-id", default="pc_rgb")
     run.add_argument(
@@ -105,6 +131,12 @@ def _parser() -> argparse.ArgumentParser:
         "--wsl-busid",
         default=None,
         help="Optional usbipd BUSID to attach (example: 2-7).",
+    )
+    run.add_argument(
+        "--allow-wsl-bind",
+        action="store_true",
+        default=False,
+        help="Allow usbipd bind fallback (may require Windows Administrator).",
     )
     run.add_argument("--quality", choices=["high", "medium"], default=None)
     run.add_argument("--min-inliers", type=int, default=None)
@@ -134,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
             skip_camera=args.skip_camera,
             auto_fix_wsl_camera=args.auto_fix_wsl_camera,
             wsl_busid=args.wsl_busid,
+            allow_wsl_bind=args.allow_wsl_bind,
         )
         for check in checks:
             print(f"{check.name:10} {check.status:5} {check.details}")
@@ -159,6 +192,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "capture":
+        if args.input_glob and args.input_video:
+            raise SystemExit("Pass only one of --input-glob or --input-video.")
         output_root = args.out or Path(config.paths.output_root)
         summary = capture_session(
             session_id=args.session_id,
@@ -174,10 +209,13 @@ def main(argv: list[str] | None = None) -> int:
             blur_threshold=config.capture.keyframe_blur_threshold,
             pixel_delta_threshold=config.capture.keyframe_pixel_delta_threshold,
             input_glob=args.input_glob,
+            input_video=args.input_video,
+            video_frame_step=args.video_frame_step,
             intrinsics_path=args.intrinsics_file,
             camera_id=args.camera_id,
             auto_fix_wsl_camera=args.auto_fix_wsl_camera,
             wsl_busid=args.wsl_busid,
+            allow_wsl_bind=args.allow_wsl_bind,
         )
         print(
             f"captured {summary.keyframes} keyframes from "
@@ -211,6 +249,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "run":
+        if args.input_glob and args.input_video:
+            raise SystemExit("Pass only one of --input-glob or --input-video.")
         output_root = args.out or Path(config.paths.output_root)
         capture = capture_session(
             session_id=args.session_id,
@@ -226,10 +266,13 @@ def main(argv: list[str] | None = None) -> int:
             blur_threshold=config.capture.keyframe_blur_threshold,
             pixel_delta_threshold=config.capture.keyframe_pixel_delta_threshold,
             input_glob=args.input_glob,
+            input_video=args.input_video,
+            video_frame_step=args.video_frame_step,
             intrinsics_path=args.intrinsics_file,
             camera_id=args.camera_id,
             auto_fix_wsl_camera=args.auto_fix_wsl_camera,
             wsl_busid=args.wsl_busid,
+            allow_wsl_bind=args.allow_wsl_bind,
         )
         tracking = run_tracking(
             session_dir=capture.session_dir,

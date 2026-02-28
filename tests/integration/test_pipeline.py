@@ -23,6 +23,22 @@ def _generate_input_images(path: Path, count: int = 8) -> None:
         cv2.imwrite(str(path / f"img_{index:02d}.jpg"), shifted)
 
 
+def _generate_input_video(path: Path, count: int = 16) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(str(path), fourcc, 15.0, (320, 240))
+    if not writer.isOpened():
+        raise RuntimeError(f"Unable to create test video: {path}")
+
+    rng = np.random.default_rng(5678)
+    base = rng.integers(0, 255, size=(240, 320, 3), dtype=np.uint8)
+    for index in range(count):
+        transform = np.float32([[1, 0, index * 2], [0, 1, index]])
+        shifted = cv2.warpAffine(base, transform, (320, 240))
+        writer.write(shifted)
+    writer.release()
+
+
 def test_end_to_end_pipeline_from_images(tmp_path: Path) -> None:
     inputs = tmp_path / "inputs"
     _generate_input_images(inputs)
@@ -81,6 +97,42 @@ def test_cli_run_chains_pipeline_from_images(tmp_path: Path) -> None:
     assert exit_code == 0
 
     session_dir = tmp_path / "outputs" / "demo"
+    assert (session_dir / "meta" / "frames.jsonl").exists()
+    assert (session_dir / "meta" / "trajectory.json").exists()
+    assert (session_dir / "reconstruction" / "pointcloud.ply").exists()
+    assert (session_dir / "exports" / "manifest.json").exists()
+
+
+def test_cli_run_chains_pipeline_from_video(tmp_path: Path) -> None:
+    video_path = tmp_path / "inputs" / "room.mp4"
+    _generate_input_video(video_path)
+
+    exit_code = main(
+        [
+            "run",
+            "--session-id",
+            "demo_video",
+            "--input-video",
+            str(video_path),
+            "--video-frame-step",
+            "2",
+            "--out",
+            str(tmp_path / "outputs"),
+            "--max-frames",
+            "20",
+            "--mode",
+            "keyframes",
+            "--quality",
+            "medium",
+            "--min-inliers",
+            "8",
+            "--step-scale-m",
+            "0.1",
+        ]
+    )
+    assert exit_code == 0
+
+    session_dir = tmp_path / "outputs" / "demo_video"
     assert (session_dir / "meta" / "frames.jsonl").exists()
     assert (session_dir / "meta" / "trajectory.json").exists()
     assert (session_dir / "reconstruction" / "pointcloud.ply").exists()

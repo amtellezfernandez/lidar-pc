@@ -31,6 +31,7 @@ def run_doctor(
     skip_camera: bool = False,
     auto_fix_wsl_camera: bool = False,
     wsl_busid: str | None = None,
+    allow_wsl_bind: bool = False,
 ) -> tuple[list[DoctorCheck], bool]:
     checks: list[DoctorCheck] = [
         DoctorCheck(
@@ -56,7 +57,7 @@ def run_doctor(
         if not camera.isOpened():
             checks.append(DoctorCheck("camera", "fail", f"unable to open index {camera_index}"))
             if auto_fix_wsl_camera and is_wsl_environment():
-                fix = attempt_wsl_camera_fix(requested_busid=wsl_busid)
+                fix = attempt_wsl_camera_fix(requested_busid=wsl_busid, allow_bind=allow_wsl_bind)
                 status = "ok" if fix.success else ("warn" if fix.attempted else "fail")
                 details = "; ".join(fix.messages) if fix.messages else "no diagnostic output"
                 checks.append(DoctorCheck("wsl_fix", status, details))

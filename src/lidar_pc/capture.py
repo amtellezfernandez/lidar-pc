@@ -89,11 +89,12 @@ def _capture_from_camera(
     fps_target: int,
     auto_fix_wsl_camera: bool = True,
     wsl_busid: str | None = None,
+    allow_wsl_bind: bool = False,
 ) -> list[np.ndarray]:
     cap = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
         if auto_fix_wsl_camera:
-            fix = attempt_wsl_camera_fix(requested_busid=wsl_busid)
+            fix = attempt_wsl_camera_fix(requested_busid=wsl_busid, allow_bind=allow_wsl_bind)
             cap.release()
             cap = cv2.VideoCapture(camera_index)
             if not cap.isOpened():
@@ -146,6 +147,33 @@ def _capture_from_files(pattern: str, max_frames: int) -> list[np.ndarray]:
     return frames
 
 
+def _capture_from_video(video_path: Path, max_frames: int, frame_step: int = 1) -> list[np.ndarray]:
+    if not video_path.exists():
+        raise RuntimeError(f"Video file not found: {video_path}")
+
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise RuntimeError(f"Unable to open video file: {video_path}")
+
+    frames: list[np.ndarray] = []
+    read_index = 0
+    step = max(frame_step, 1)
+    try:
+        while len(frames) < max_frames:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            if read_index % step == 0:
+                frames.append(frame)
+            read_index += 1
+    finally:
+        cap.release()
+
+    if not frames:
+        raise RuntimeError(f"No readable frames found in video: {video_path}")
+    return frames
+
+
 def capture_session(
     *,
     session_id: str,
@@ -161,17 +189,29 @@ def capture_session(
     blur_threshold: float = 40.0,
     pixel_delta_threshold: float = 10.0,
     input_glob: str | None = None,
+    input_video: Path | None = None,
+    video_frame_step: int = 1,
     intrinsics_path: Path | None = None,
     camera_id: str = "pc_rgb",
     auto_fix_wsl_camera: bool = True,
     wsl_busid: str | None = None,
+    allow_wsl_bind: bool = False,
 ) -> CaptureSummary:
     session_dir = allocate_session_dir(output_root=output_root, session_id=session_id)
     rgb_dir = ensure_dir(session_dir / "rgb")
     meta_dir = ensure_dir(session_dir / "meta")
 
+    if input_glob and input_video:
+        raise RuntimeError("Specify only one of --input-glob or --input-video.")
+
     if input_glob:
         source_frames = _capture_from_files(pattern=input_glob, max_frames=max_frames)
+    elif input_video is not None:
+        source_frames = _capture_from_video(
+            video_path=input_video,
+            max_frames=max_frames,
+            frame_step=video_frame_step,
+        )
     else:
         source_frames = _capture_from_camera(
             camera_index=camera_index,
@@ -182,6 +222,7 @@ def capture_session(
             fps_target=fps_target,
             auto_fix_wsl_camera=auto_fix_wsl_camera,
             wsl_busid=wsl_busid,
+            allow_wsl_bind=allow_wsl_bind,
         )
 
     records: list[FrameRecord] = []
@@ -238,7 +279,7 @@ def capture_session(
             "schema_version": "v1",
             "session_id": session_dir.name,
             "capture_mode": capture_mode,
-            "source": "images" if input_glob else "camera",
+            "source": "images" if input_glob else ("video" if input_video else "camera"),
             "camera_index": camera_index,
             "fps_target": fps_target,
             "max_frames": max_frames,

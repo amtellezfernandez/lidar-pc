@@ -13,4 +13,5 @@ python -m pip install -e .[dev]
 
 echo "WSL setup complete. Activate with: source .venv/bin/activate"
 echo "Then run camera diagnostics: .venv/bin/lidar-pc doctor --camera-index 0 --auto-fix-wsl-camera"
+echo "If needed, opt into admin bind fallback: --allow-wsl-bind"
 echo "If camera attach fails, install usbipd-win on Windows and retry."

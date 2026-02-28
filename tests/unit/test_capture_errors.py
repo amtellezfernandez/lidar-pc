@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 import pytest
 
-from lidar_pc.capture import _capture_from_files, calibrate_camera
+from lidar_pc.capture import _capture_from_video, _capture_from_files, calibrate_camera
 
 
 def test_capture_from_files_error_includes_pattern_and_cwd(
@@ -43,3 +43,13 @@ def test_calibrate_camera_error_reports_found_count(tmp_path: Path) -> None:
     assert "Not enough checkerboard detections" in message
     assert "found 0, need >= 5 samples" in message
     assert "pattern" in message
+
+
+def test_capture_from_video_missing_file_reports_path(tmp_path: Path) -> None:
+    missing = tmp_path / "room.mp4"
+    with pytest.raises(RuntimeError) as excinfo:
+        _capture_from_video(missing, max_frames=10, frame_step=1)
+
+    message = str(excinfo.value)
+    assert "Video file not found" in message
+    assert str(missing) in message

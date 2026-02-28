@@ -69,6 +69,11 @@ Input images instead of camera:
 lidar-pc run --session-id demo --input-glob "data/*.jpg" --out outputs
 ```
 
+Input a room video instead of camera:
+```bash
+lidar-pc run --session-id room01 --input-video data/room.mp4 --video-frame-step 3 --out outputs
+```
+
 Optional pre-check:
 ```bash
 lidar-pc doctor --skip-camera
@@ -78,6 +83,7 @@ lidar-pc doctor --skip-camera
 ```bash
 lidar-pc calibrate --camera-id laptop_cam --board 6x9 --square-mm 25 --samples 20
 lidar-pc capture --session-id run01 --input-glob "data/*.jpg" --out outputs
+lidar-pc capture --session-id run01 --input-video "data/room.mp4" --video-frame-step 3 --out outputs
 lidar-pc capture --session-id room01 --camera-index 0 --auto-fix-wsl-camera
 lidar-pc reconstruct --session outputs/run01 --min-inliers 30 --step-scale-m 0.1
 lidar-pc export --session outputs/run01
@@ -111,9 +117,11 @@ outputs/<session_id>/
 - macOS: `scripts/setup_macos.sh`
 - Windows PowerShell: `scripts/setup_windows.ps1`
 - WSL camera helper: `scripts/fix_wsl_camera.sh`
+- WSL no-camera scan helper: `scripts/scan_room_video.sh`
 
 ## WSL Camera Notes
 - `lidar-pc doctor` and `lidar-pc capture` now try WSL camera passthrough automatically by default.
+- The auto-fix uses `attach` first and skips admin-only `bind` unless you pass `--allow-wsl-bind`.
 - You can pin a specific USB camera with `--wsl-busid <BUSID>`.
 - If auto-attach fails, run this on Windows PowerShell as Administrator:
 ```powershell
@@ -122,6 +130,10 @@ usbipd list
 usbipd bind --busid 2-8
 usbipd attach --wsl "Ubuntu-24.04" --busid 2-8 --auto-attach
 usbipd list
+```
+- To allow `lidar-pc` to run the bind fallback automatically, add `--allow-wsl-bind`:
+```bash
+lidar-pc doctor --camera-index 0 --auto-fix-wsl-camera --allow-wsl-bind
 ```
 - Replace `2-8` with your actual camera BUSID from `usbipd list`. Do not type `<BUSID>` literally in PowerShell.
 - If `usbipd` is missing, install it from PowerShell:
